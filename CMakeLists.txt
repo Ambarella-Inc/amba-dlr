@@ -3,6 +3,8 @@ include(cmake/Utils.cmake)
 include(3rdparty/tvm/cmake/util/Util.cmake)
 include(3rdparty/tvm/cmake/util/FindCUDA.cmake)
 
+# test by Monica
+
 # Option for Android on Arm --- has to come before project() function
 option(ANDROID_BUILD "Build for Android target" OFF)
 option(AAR_BUILD "Build Android Archive (AAR)" OFF)
