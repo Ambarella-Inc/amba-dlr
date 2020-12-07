@@ -3,8 +3,6 @@ include(cmake/Utils.cmake)
 include(3rdparty/tvm/cmake/util/Util.cmake)
 include(3rdparty/tvm/cmake/util/FindCUDA.cmake)
 
-# test by Monica
-
 # Option for Android on Arm --- has to come before project() function
 option(ANDROID_BUILD "Build for Android target" OFF)
 option(AAR_BUILD "Build Android Archive (AAR)" OFF)
@@ -16,6 +14,11 @@ if(ANDROID_BUILD)
         message(STATUS "ANDROID_PLATFORM not set. Defaulting to android-21")
     endif()
 endif(ANDROID_BUILD)
+
+if(USE_AMBARELLA)
+    set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++ CACHE FILEPATH "CXX compiler." FORCE)
+    set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc CACHE FILEPATH "C compiler." FORCE)
+endif()
 
 project(dlr)
 
@@ -116,6 +119,48 @@ FILE(GLOB DLR_SRC
     ${TVM_SRC}/src/runtime/metadata_module.cc
     ${TVM_SRC}/src/runtime/contrib/sort/sort.cc
 )
+
+if(USE_AMBARELLA)
+    message(STATUS "Using Ambarella")
+
+    set(AMBA_ROOT_DIR "${PROJECT_SOURCE_DIR}/prebuild/amba")
+    message(STATUS "Custom Ambarella path: " ${AMBA_ROOT_DIR})
+
+    find_path(AMBA_INCLUDE_DIR amba_tvm.h HINTS ${AMBA_ROOT_DIR} PATH_SUFFIXES include)
+    if(EXISTS ${AMBA_INCLUDE_DIR})
+      include_directories(${AMBA_INCLUDE_DIR})
+    else(AMBA_INCLUDE_DIR)
+      message(ERROR " Could not find Ambarella include files.")
+    endif()
+
+    find_library(AMBA_LIB_AMBA_TVM amba_tvm HINTS ${AMBA_ROOT_DIR} PATH_SUFFIXES lib)
+    if (EXISTS ${AMBA_LIB_AMBA_TVM})
+      list(APPEND DLR_LINKER_LIBS ${AMBA_LIB_AMBA_TVM})
+    else (AMBA_LIB_AMBA_TVM)
+      message(ERROR " Could not find Ambarella lib file libamba_tvm.so.")
+    endif()
+
+    find_library(AMBA_LIB_CAVALRY_MEM cavalry_mem HINTS ${AMBA_ROOT_DIR} PATH_SUFFIXES lib)
+    if (EXISTS ${AMBA_LIB_CAVALRY_MEM})
+      list(APPEND DLR_LINKER_LIBS ${AMBA_LIB_CAVALRY_MEM})
+    else (AMBA_LIB_CAVALRY_MEM)
+      message(ERROR " Could not find Ambarella lib file libcavalry_mem.so.")
+    endif()
+
+    find_library(AMBA_LIB_NNCTRL nnctrl HINTS ${AMBA_ROOT_DIR} PATH_SUFFIXES lib)
+    if (EXISTS ${AMBA_LIB_NNCTRL})
+      list(APPEND DLR_LINKER_LIBS ${AMBA_LIB_NNCTRL})
+    else (AMBA_LIB_NNCTRL)
+      message(ERROR " Could not find Ambarella lib file libnnctrl.so.")
+    endif()
+
+    file(GLOB AMBA_CONTRIB_SRC ${TVM_SRC}/src/runtime/contrib/amba/amba_module.cc)
+    list(APPEND DLR_SRC ${AMBA_CONTRIB_SRC})
+
+    set(USE_AMBARELLA OFF)
+    set(USE_AMBA_RUNTIME "${AMBA_ROOT_DIR}")
+    set(USE_AMBA_TOOLCHAIN ON)
+endif()
 
 if(USE_OPENCL)
     message("USING OpenCL")
