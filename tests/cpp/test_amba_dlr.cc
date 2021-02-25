@@ -332,8 +332,9 @@ static void* dlr_execute_one_net(dlr_ctx_t *p_ctx, dlr_net_cfg_t *p_net)
 	DLContext ctx = {static_cast<DLDeviceType>(p_ctx->dev.type), p_ctx->dev.id};
 	std::vector<std::string> paths;
 	paths.push_back(std::string(p_net->model_fn));
+	std::vector<std::string> files = dlr::FindFiles(paths);
 
-	dlr::TVMModel mod = dlr::TVMModel(paths, ctx);
+	dlr::TVMModel mod = dlr::TVMModel(files, ctx);
 
 	int num_outputs  = mod.GetNumOutputs();
 	int num_inputs = p_net->input_num;
