@@ -48,29 +48,44 @@ extern "C" {
 #define INOUT
 
 typedef struct {
-	INOUT uint32_t engine_id;
 	IN const char* engine_name;
 	IN const char* engine_filepath;
+	INOUT uint32_t engine_id;
+	uint32_t reserve[11];
 } amba_engine_cfg_t;
 
 typedef struct {
-	void *data_virt;	// should be float*
-	uint32_t data_phys;
-	uint8_t ndim;
-	uint8_t bits;		// should always be float (bits==32)
-	uint8_t reserve[2];
-	int64_t *shape;
-	uint32_t size;		// tensor size
+	void* data_virt;
+	uint32_t device_type;
+	int32_t device_id;
+	int32_t ndim;
+	uint8_t dtype_code;
+	uint8_t dtype_bits;
+	uint16_t dtype_lanes;
+	int64_t* shape;
+	int64_t* strides;
+	uint64_t byte_offset;
+	uint32_t size;		// tensor size without padding
+	uint32_t reserve[7];
 } AmbaDLTensor;
 
 typedef struct {
+	AmbaDLTensor *tensors;
+	const char** names;
+	uint32_t num;
+	uint32_t reserve[11];
+} amba_engine_io_t;
+
+typedef struct {
 	uint32_t cvflow_time_us;
+	uint32_t reserve[7];
 } amba_perf_t;
 
 AMBA_API int GetAmbaTVMLibVersion(void);
 
 AMBA_API int InitAmbaTVM(void);
-AMBA_API int InitAmbaEngine(amba_engine_cfg_t * engine_cfg);
+AMBA_API int InitAmbaEngine(amba_engine_cfg_t * engine_cfg,
+	amba_engine_io_t * engine_input,amba_engine_io_t * engine_output);
 AMBA_API int SetAmbaEngineInput(amba_engine_cfg_t *engine_cfg,
 	const char *input_name, AmbaDLTensor *input);
 AMBA_API int RunAmbaEngine(amba_engine_cfg_t * engine_cfg,
@@ -85,6 +100,9 @@ AMBA_API int CheckAmbaEngineOutputName(amba_engine_cfg_t * engine_cfg,
 	const char * output_name);
 
 AMBA_API int ConfigAmbaEngineLocation(const char *dirpath);
+
+AMBA_API void* AmbaDeviceAlloc(unsigned long nbytes, unsigned long alignment);
+AMBA_API int AmbaDeviceFree(void* ptr);
 
 
 #ifdef __cplusplus
