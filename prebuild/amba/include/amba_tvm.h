@@ -50,8 +50,8 @@ extern "C" {
 typedef struct {
 	IN const char* engine_name;
 	IN const char* engine_filepath;
-	INOUT unsigned long engine_id;
-	uint32_t reserve[10];
+	INOUT uint32_t engine_id;
+	uint32_t reserve[11];
 } amba_engine_cfg_t;
 
 typedef struct {
