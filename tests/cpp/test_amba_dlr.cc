@@ -153,7 +153,7 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 				return -1;
 			}
 			net_idx = net_num;
-			strcpy(p_ctx->net_cfg[net_idx].model_fn, optarg);
+			snprintf(p_ctx->net_cfg[net_idx].model_fn, sizeof(p_ctx->net_cfg[net_idx].model_fn), "%s", optarg);
 			++ net_num;
 			break;
 		case 'i':
@@ -168,7 +168,7 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 				printf("IO pair number is too much: %u > %u.\n", in_idx, MAX_IO_NUM);
 				return -1;
 			}
-			strcpy(p_ctx->net_cfg[net_idx].input_node[in_idx].io_name, optarg);
+			snprintf(p_ctx->net_cfg[net_idx].input_node[in_idx].io_name, sizeof(p_ctx->net_cfg[net_idx].input_node[in_idx].io_name), "%s", optarg);
 			++ p_ctx->net_cfg[net_idx].input_num;
 			break;
 		case 'f':
@@ -178,7 +178,7 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 					value, FILENAME_LENGTH);
 				return -1;
 			}
-			strcpy(p_ctx->net_cfg[net_idx].input_node[in_idx].io_fn, optarg);
+			snprintf(p_ctx->net_cfg[net_idx].input_node[in_idx].io_fn, sizeof(p_ctx->net_cfg[net_idx].input_node[in_idx].io_fn), "%s", optarg);
 			break;
 		case 's':
 			{
@@ -329,7 +329,7 @@ static void* dlr_execute_one_net(dlr_ctx_t *p_ctx, dlr_net_cfg_t *p_net)
 
 	ConfigAmbaEngineLocation(p_net->model_fn);
 
-	DLContext ctx = {static_cast<DLDeviceType>(p_ctx->dev.type), p_ctx->dev.id};
+	DLDevice ctx = {static_cast<DLDeviceType>(p_ctx->dev.type), p_ctx->dev.id};
 	std::vector<std::string> paths;
 	paths.push_back(std::string(p_net->model_fn));
 	std::vector<std::string> files = dlr::FindFiles(paths);
@@ -348,16 +348,16 @@ static void* dlr_execute_one_net(dlr_ctx_t *p_ctx, dlr_net_cfg_t *p_net)
 	int out_dim[num_outputs] = {0};
 
 	do {
-		if (mod.HasMetadata()) {
-			for (int i = 0; i < num_outputs; ++i) {
-				const char* out_name = mod.GetOutputName(i);
-				printf("model output %d name %s\n", i, out_name);
-			}
-		}
 		for (int i = 0; i < num_outputs; ++i) {
 			mod.GetOutputSizeDim(i, &out_buf_size[i], &out_dim[i]);
 			out_buf_size[i] *= sizeof(float);
 			out_buf[i] = static_cast<const float*>(mod.GetOutputPtr(i));
+		}
+		if (mod.HasMetadata()) {
+			for (int i = 0; i < num_outputs; ++i) {
+				const char* out_name = mod.GetOutputName(i);
+				mod.GetOutputByName(out_name, const_cast<void*>(mod.GetOutputPtr(i)));
+			}
 		}
 
 		for (int i = 0; i < num_inputs; ++i) {
