@@ -164,7 +164,7 @@ if(USE_AMBARELLA)
       message(ERROR " Could not find Ambarella lib file libnnctrl.so.")
     endif()
 
-    file(GLOB AMBA_CONTRIB_SRC ${TVM_SRC}/src/runtime/contrib/amba/amba_module.cc)
+    file(GLOB AMBA_CONTRIB_SRC ${TVM_SRC}/src/runtime/contrib/amba/*.cc)
     list(APPEND DLR_SRC ${AMBA_CONTRIB_SRC})
 
     set(USE_AMBARELLA OFF)
