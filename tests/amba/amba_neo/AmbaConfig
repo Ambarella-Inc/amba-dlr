@@ -1,0 +1,45 @@
+################################################################################
+# AmbaConfig
+#
+# History:
+#    2022/05/20 - [Monica Yang] Created
+#
+# Copyright [2022] Ambarella International LP.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+
+
+menuconfig BUILD_AMBARELLA_UNIT_TESTS_AMBA_NEO
+	depends on (CONFIG_ARCH_CV22 || CONFIG_ARCH_CV2 || CONFIG_ARCH_CV25 || CONFIG_ARCH_CV28 || CONFIG_ARCH_CV5)
+	bool "Build Amba-Neo unit tests"
+	default n
+	select BUILD_AMBARELLA_NNCTRL_PACKAGE
+	select BUILD_AMBARELLA_VPROC_PACKAGE
+	select BUILD_AMBARELLA_CAVALRY_MEM_PACKAGE
+	select BUILD_AMBARELLA_FAST_IO_PACKAGE
+	select BUILD_AMBARELLA_SMARTFB_PACKAGE
+	select CONFIG_AMBARELLA_FREETYPE_SUPPORT
+	help
+		Build Ambarella Private DLR/TVM unit tests
+
+if BUILD_AMBARELLA_UNIT_TESTS_AMBA_NEO
+
+config AMBA_DLR_ROOT_DIR
+	string "Ambarella DLR root folder"
+	default "$(AMB_TOPDIR)/../../amba-dlr"
+	help
+		Use DLR header and library files from the defined DIR
+
+endif	# End of BUILD_AMBARELLA_UNIT_TESTS_AMBA_NEO
+
