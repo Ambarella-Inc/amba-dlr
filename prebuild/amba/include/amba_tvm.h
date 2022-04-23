@@ -30,7 +30,7 @@ extern "C" {
 
 #define AMBA_TVM_LIB_MAJOR 0
 #define AMBA_TVM_LIB_MINOR 0
-#define AMBA_TVM_LIB_PATCH 1
+#define AMBA_TVM_LIB_PATCH 2
 #define AMBA_TVM_LIB_VERSION ((AMBA_TVM_LIB_MAJOR << 16) | \
 			(AMBA_TVM_LIB_MINOR << 8)  | \
 			AMBA_TVM_LIB_PATCH)

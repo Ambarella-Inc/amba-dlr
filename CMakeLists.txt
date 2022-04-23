@@ -162,13 +162,13 @@ if(USE_AMBARELLA)
       message(ERROR " Could not find Ambarella lib file libnnctrl.so.")
     endif()
 
-    file(GLOB AMBA_CONTRIB_SRC ${TVM_SRC}/src/runtime/contrib/amba/amba_module.cc)
+    file(GLOB AMBA_CONTRIB_SRC ${TVM_SRC}/src/runtime/contrib/amba/*.cc)
     list(APPEND DLR_SRC ${AMBA_CONTRIB_SRC})
 
     set(USE_AMBARELLA OFF)
     set(USE_AMBA_RUNTIME "${AMBA_ROOT_DIR}")
     set(USE_AMBA_TOOLCHAIN ON)
-    set(USE_GRAPH_RUNTIME_DEBUG ON)
+    set(USE_GRAPH_EXECUTOR_DEBUG ON)
 endif()
 
 if(USE_OPENCL)
