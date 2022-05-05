@@ -9,6 +9,9 @@ option(AAR_BUILD "Build Android Archive (AAR)" OFF)
 option(DLR_BUILD_TESTS "Build DLR tests" ON)
 option(DLR_STATIC_LIBSTDCPP "Use -static-libstdc++" OFF)
 
+# Option for Ambarella target on Arm
+option(USE_AMBARELLA "Build Ambarella target" ON)
+
 if(ANDROID_BUILD)
     set(ANDROID_SYSROOT "${NDK_ROOT}/sysroot")
     if(NOT ANDROID_PLATFORM AND NOT ANDROID_NATIVE_API_LEVEL)
