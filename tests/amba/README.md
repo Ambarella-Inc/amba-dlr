@@ -73,5 +73,3 @@ There are preparation steps to do compilation job in Sagemaker service. More det
 
 NOTES: "test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live" are only sample code and users should write their own app in real produce design.
 
-
-```
