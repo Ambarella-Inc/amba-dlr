@@ -33,26 +33,26 @@ To build these unit test apps in SDK, users need to copy the files in folder amb
 After amba_neo is copied to SDK, please do menuconfig in SDK command line to enable unit test compilation. Unit test relies on amba-dlr source code. User needs to specify the amba-dlr folder path (AMBA_DLR_ROOT_DIR) in user side with absolute folder path.
 
 	$ make menuconfig  
-		-> Ambarella Unit Test Configuration (BUILD_AMBARELLA_UNIT_TESTS [=y])  
-			-> Ambarella Private Linux Unit test configs (BUILD_AMBARELLA_PRIVATE_LINUX_UNIT_TESTS [=y])  
-				-> Build Amba-Neo unit tests (BUILD_AMBARELLA_UNIT_TESTS_AMBA_NEO [=y])  
-					->AMBA_DLR_ROOT_DIR [=$(AMB_TOPDIR)/../../amba-dlr]
+	  -> Ambarella Unit Test Configuration (BUILD_AMBARELLA_UNIT_TESTS [=y])  
+	    -> Ambarella Private Linux Unit test configs (BUILD_AMBARELLA_PRIVATE_LINUX_UNIT_TESTS [=y])  
+	      -> Build Amba-Neo unit tests (BUILD_AMBARELLA_UNIT_TESTS_AMBA_NEO [=y])  
+	        ->AMBA_DLR_ROOT_DIR [=$(AMB_TOPDIR)/../../amba-dlr]
 
 ### 2.3 Build firmware and burn it to CV2x EVK
 
 Build firmware with DLR/TVM unit test apps.
 
-		$ make -j4
+	$ make -j4
 
 Build DLR/TVM unit test apps respectively.
 
-		$ make test_amba_dlr -j4
+	$ make test_amba_dlr -j4
 
-		$ make test_amba_dlr_live -j4
+	$ make test_amba_dlr_live -j4
 
-		$ make test_amba_tvm -j4
+	$ make test_amba_tvm -j4
 
-		$ make test_amba_tvm_live -j4
+	$ make test_amba_tvm_live -j4
 
 
 ##  3. Runtime in Silicon Side
