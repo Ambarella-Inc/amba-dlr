@@ -468,11 +468,13 @@ static int check_dlr_version(void)
 {
 	int rval = 0;
 
-	if (DLR_MAKE_VERSION(DLR_APP_MAJOR, DLR_APP_MINOR, DLR_APP_PATCH) < DLR_VERSION) {
-		printf("Error: DLR version should not be less than (%d, %d, %d)\n", DLR_APP_MAJOR,
-			DLR_APP_MINOR, DLR_APP_PATCH);
+	if (DLR_MAKE_VERSION(DLR_APP_MAJOR, DLR_APP_MINOR, DLR_APP_PATCH) != DLR_VERSION) {
+		printf("Error: DLR unit test app version (%d, %d, %d) doesn't match "
+			"DLR library version (%d, %d, %d)\n", DLR_APP_MAJOR,
+			DLR_APP_MINOR, DLR_APP_PATCH, DLR_MAJOR, DLR_MINOR, DLR_PATCH);
 		rval = -1;
 	}
+
 
 	return rval;
 }

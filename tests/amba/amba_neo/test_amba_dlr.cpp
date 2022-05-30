@@ -40,6 +40,8 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <sys/time.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -60,6 +62,12 @@
 #define ALIGN_32_BYTE(x) ((((x) + 31) >> 5) << 5)
 #endif
 
+typedef enum {
+	DLR_FILE_MODE = 0,
+	DLR_REGRESSION_MODE = 2,
+	DLR_RUN_MODE_NUM,
+} dlr_run_mode_t;
+
 typedef struct {
 	int type;
 	int id;
@@ -76,15 +84,29 @@ typedef struct dlr_net_cfg_s {
 	dlr_io_cfg_t input_node[MAX_IO_NUM];
 } dlr_net_cfg_t;
 
+typedef struct dlr_socket_s {
+	int32_t server_fd;
+	int32_t client_fd;
+	int32_t socket_port;
+	int32_t server_id;
+
+	int32_t total_img_num;
+	int32_t cur_img_cnt;
+} dlr_socket_t;
+
 typedef struct {
 	uint32_t net_num;
 	dlr_net_cfg_t net_cfg[MAX_NET_NUM];
 
+	int run_mode;
 	dlr_dev_t dev;
 	uint32_t show_io;
-
 	uint32_t print_time;
-}dlr_ctx_t;
+
+	dlr_socket_t socket_cfg;
+} dlr_ctx_t;
+
+static int run_flag = 1;
 
 #ifndef NO_ARG
 #define NO_ARG (0)
@@ -95,22 +117,30 @@ typedef struct {
 #endif
 
 typedef enum {
-	SHOW_IO = 0,
-} tvm_option_t;
+	TOTAL_IMG_NUM = 0,
+	SERVER_ID = 1,
+	SOCKET_PORT = 2,
+	SHOW_IO = 3,
+} dlr_option_t;
 
 static struct option long_options[] = {
 	{"mod-dir",	HAS_ARG, 0, 'b'},
 	{"in",	HAS_ARG, 0, 'i'},
 	{"ifile",	HAS_ARG, 0, 'f'},
+	{"run-mode",	HAS_ARG, 0, 'r'},
 
 	{"print-time",	NO_ARG, 0, 'e'},
 	{"show-io",	NO_ARG, 0, SHOW_IO},
+
+	{"img-num",	HAS_ARG, 0, TOTAL_IMG_NUM},
+	{"server-id",	HAS_ARG, 0, SERVER_ID},
+	{"socket-port",	HAS_ARG, 0, SOCKET_PORT},
 
 	{"help",	NO_ARG, 0, 'h'},
 	{0, 0, 0, 0},
 };
 
-static const char *short_options = "b:i:f:eh";
+static const char *short_options = "b:i:f:r:eh";
 
 struct hint_s {
 	const char *arg;
@@ -123,9 +153,14 @@ static const struct hint_s hint[] = {
 	{"", "\t\tName of input node. Use multiple -i if there are more than one input nodes."
 		"Order of names should be the same as those in compiled.json file."},
 	{"", "\tBinary file for network input with float format. Only for file mode and should be preprocessed."},
+	{"", "\tRun mode; 0 file mode; 2 regression test mode."},
 
 	{"", "\tEnable time print. Default is disable."},
 	{"", "\tShow primary i/o info of compiled artifacts."},
+
+	{"", "\tTotal number of test images for regression test."},
+	{"", "\tServer id when multiple EVK are used for regression test."},
+	{"", "\tSocket port in regression test mode."},
 
 	{"", "\tprint help info"},
 };
@@ -165,7 +200,7 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 			++p_ctx->net_num;
 		}
 	}
-	if (p_ctx->net_num > 8) {
+	if (p_ctx->net_num > MAX_NET_NUM) {
 		printf("Error: only support %d net modes at most.\n", MAX_NET_NUM);
 		return -1;
 	}
@@ -174,8 +209,12 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 		memset(p_ctx->net_cfg[i].input_node, 0, MAX_IO_NUM * sizeof(dlr_io_cfg_t));
 	}
 
+	p_ctx->run_mode = DLR_FILE_MODE;		// default is file mode
 	p_ctx->dev.type = kDLAmba;	// default device type is Amba Device
 	p_ctx->dev.id = 0;			// default device id is 0
+
+	p_ctx->socket_cfg.socket_port = 27182;
+	p_ctx->socket_cfg.cur_img_cnt = 1;
 	while ((ch = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (ch) {
 		case 'b':
@@ -213,11 +252,23 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 			}
 			snprintf(p_ctx->net_cfg[net_idx].input_node[in_idx].io_fn, sizeof(p_ctx->net_cfg[net_idx].input_node[in_idx].io_fn), "%s", optarg);
 			break;
+		case 'r':
+			p_ctx->run_mode = atoi(optarg);
+			break;
 		case 'e':
 			p_ctx->print_time = 1;
 			break;
 		case SHOW_IO:
 			p_ctx->show_io = 1;
+			break;
+		case SOCKET_PORT:
+			p_ctx->socket_cfg.socket_port = atoi(optarg);
+			break;
+		case SERVER_ID:
+			p_ctx->socket_cfg.server_id = atoi(optarg);
+			break;
+		case TOTAL_IMG_NUM:
+			p_ctx->socket_cfg.total_img_num = atoi(optarg);
 			break;
 		case 'h':
 			usage();
@@ -246,9 +297,10 @@ static int check_dlr_version(void)
 {
 	int rval = 0;
 
-	if (DLR_MAKE_VERSION(DLR_APP_MAJOR, DLR_APP_MINOR, DLR_APP_PATCH) < DLR_VERSION) {
-		printf("Error: DLR version should not be less than (%d, %d, %d)\n", DLR_APP_MAJOR,
-			DLR_APP_MINOR, DLR_APP_PATCH);
+	if (DLR_MAKE_VERSION(DLR_APP_MAJOR, DLR_APP_MINOR, DLR_APP_PATCH) != DLR_VERSION) {
+		printf("Error: DLR unit test app version (%d, %d, %d) doesn't match "
+			"DLR library version (%d, %d, %d)\n", DLR_APP_MAJOR,
+			DLR_APP_MINOR, DLR_APP_PATCH, DLR_MAJOR, DLR_MINOR, DLR_PATCH);
 		rval = -1;
 	}
 
@@ -381,6 +433,221 @@ static int dlr_get_DLTensor_size(const DLTensor *t)
 	return size;
 }
 
+static int dlr_init_socket(dlr_socket_t *p_socket)
+{
+	int rval = 0;
+	struct sockaddr_in server;
+
+	do {
+		printf("Init socket io.\n");
+		p_socket->server_fd = socket(AF_INET, SOCK_STREAM, 0);
+		if (p_socket->server_fd < 0) {
+			printf("ERROR: Unable to create parent socket!\n");
+			rval = -1; break;
+		}
+
+		server.sin_family = AF_INET;
+		server.sin_addr.s_addr = INADDR_ANY;
+		server.sin_port = htons(p_socket->socket_port);
+		printf("test_amba_dlr open port %d.\n", p_socket->socket_port);
+
+		rval = bind(p_socket->server_fd, (struct sockaddr *)&server, sizeof(server));
+		if (rval < 0) {
+			printf("ERROR: Unable to bind server socket!\n");
+			close(p_socket->server_fd);
+			rval = -1; break;
+		}
+		printf("Bind socket success.\n");
+		printf("Listening... \n");
+
+		rval = listen(p_socket->server_fd, 1);
+		if (rval < 0) {
+			printf("ERROR: Unable to listen at server socket!\n");
+			close(p_socket->server_fd);
+			rval = -1; break;
+		}
+
+		p_socket->client_fd = accept(p_socket->server_fd, (struct sockaddr *)0, (socklen_t *)0);
+		if (p_socket->client_fd < 0) {
+			printf("ERROR: Unable to accept client!\n");
+			rval = -1; break;
+		}
+		printf("Accept socket success.\n");
+	} while(0);
+
+	return rval;
+}
+
+static int dlr_deinit_socket(dlr_socket_t *p_socket)
+{
+	int rval = 0;
+
+	if (p_socket->client_fd) {
+		close(p_socket->client_fd);
+	}
+	if (p_socket->server_fd) {
+		close(p_socket->server_fd);
+	}
+
+	return rval;
+}
+
+static int dlr_read_socket(int socket_fd, void *dest, int size)
+{
+	int rval = 0;
+	int recv_size = 0;
+
+	do {
+		rval = recv(socket_fd, (uint8_t *)dest + recv_size, size - recv_size, 0);
+		if (rval > 0) {
+			recv_size += rval;
+		} else {
+			printf("Engine_error: Unable to receive data!\n");
+			rval = -1;
+			break;
+		}
+	} while (recv_size < size);
+
+	return rval;
+}
+
+static ssize_t dlr_write_socket(int socket_fd, const void *buf, size_t len)
+{
+	size_t nleft;
+	ssize_t nwritten;
+	const char *ptr = NULL;
+
+	if (socket_fd < 0 || buf == NULL || len <= 0) {
+		return -1; /* error */
+	}
+
+	ptr = (char *)buf;
+	nleft = len;
+
+	while (nleft > 0) {
+		nwritten = write(socket_fd, ptr, nleft);
+		if (nwritten <= 0) {
+			if (errno == EINTR)
+				nwritten = 0; /* interupted, call write again */
+			else
+				return -1; /* error */
+		}
+		nleft -= nwritten;
+		ptr += nwritten;
+	}
+
+	return (len - nleft);
+}
+
+static int dlr_proc_socket_input(dlr_socket_t *p_socket, dlr_net_cfg_t *p_net, DLTensor **in_t)
+{
+	int rval = 0;
+	int32_t socket_fd = p_socket->client_fd;
+	int32_t total_img_num = -1, cur_img_cnt = -1;
+	uint32_t input_num = 0;
+	uint32_t i = 0;
+	char io_name[NAME_LENGTH];
+
+	do {
+		rval = dlr_read_socket(socket_fd, &total_img_num, sizeof(p_socket->total_img_num));
+		if (rval < 0 || total_img_num != p_socket->total_img_num) {
+			printf("Error: failed to get correct total test image number: receive %d, should be %d.\n", \
+				total_img_num, p_socket->total_img_num);
+			rval = -1; break;
+		}
+
+		rval = dlr_read_socket(socket_fd, &cur_img_cnt, sizeof(p_socket->cur_img_cnt));
+		if (rval < 0 || cur_img_cnt != p_socket->cur_img_cnt) {
+			printf("Error: failed to get correct current image count: receive %d, should be %d.\n", \
+				cur_img_cnt, p_socket->cur_img_cnt);
+			rval = -1; break;
+		}
+
+		rval = dlr_read_socket(socket_fd, &input_num, sizeof(p_net->input_num));
+		if (rval < 0 || input_num != p_net->input_num) {
+			printf("Error: failed to get correct input num: receive %d, should be %d.\n", \
+				input_num, p_net->input_num);
+			rval = -1; break;
+		}
+
+		/* loop for multiple inputs */
+		for (i = 0; i < input_num; ++i) {
+			int32_t in_size = dlr_get_DLTensor_size(in_t[i]);
+			int32_t file_size = -1;
+			rval = dlr_read_socket(socket_fd, &file_size, sizeof(file_size));
+			if (rval < 0 || file_size != in_size) {
+				printf("Error: failed to get correct input file size: receive %d, should be %d.\n", \
+					file_size, in_size);
+				rval = -1; break;
+			}
+
+			rval = dlr_read_socket(socket_fd, in_t[i]->data, file_size);
+			if (rval < 0) {
+				printf("Error: failed to get input buffer of io name %s.\n", io_name);
+				rval = -1; break;
+			}
+		}
+		if (rval) break;
+	}while(0);
+
+	return rval;
+}
+
+static int dlr_proc_socket_output(dlr_socket_t *p_socket,
+	DLTensor **out_t, int num_outputs)
+{
+	int rval = 0;
+	int32_t socket_fd = p_socket->client_fd;
+	int32_t total_img_num = p_socket->total_img_num;
+	int32_t cur_img_cnt = p_socket->cur_img_cnt;
+	int32_t output_num = num_outputs;
+	int32_t file_size = 0;
+
+	do {
+		if (dlr_write_socket(socket_fd, &total_img_num, sizeof(total_img_num)) != sizeof(total_img_num)) {
+			printf("Error: failed to send total image number.\n");
+			rval = -1;
+			break;
+		}
+		if (dlr_write_socket(socket_fd, &cur_img_cnt, sizeof(cur_img_cnt)) != sizeof(cur_img_cnt)) {
+			printf("Error: failed to send current image count.\n");
+			rval = -1;
+			break;
+		}
+		if (dlr_write_socket(socket_fd, &output_num, sizeof(output_num)) != sizeof(output_num)) {
+			printf("Error: failed to send output number.\n");
+			rval = -1;
+			break;
+		}
+		for (int32_t i = 0; i < output_num; ++i) {
+			if (dlr_write_socket(socket_fd, &i, sizeof(i)) != sizeof(i)) {
+				printf("Error: failed to send outptu index.\n");
+				rval = -1;
+				break;
+			}
+			file_size = dlr_get_DLTensor_size(out_t[i]);
+			if (dlr_write_socket(socket_fd, &file_size, sizeof(file_size)) != sizeof(file_size)) {
+				printf("Error: failed to send file size.\n");
+				rval = -1;
+				break;
+			}
+			if (dlr_write_socket(socket_fd, out_t[i]->data, file_size) != file_size) {
+				printf("Error: failed to send output buffer of index %d.\n", i);
+				rval = -1;
+				break;
+			}
+		}
+		if (rval) break;
+
+		++ p_socket->cur_img_cnt;
+		if (p_socket->cur_img_cnt > p_socket->total_img_num) {
+			run_flag = 0;
+		}
+	} while(0);
+
+	return rval;
+}
+
 static int dlr_read_binary(const char* filename, DLTensor *t)
 {
 	int rval = 0;
@@ -440,10 +707,12 @@ static int dlr_process_classification(dlr_ctx_t *p_ctx, DLTensor* out, int num_c
 		}
 	}
 
-	printf("Top 5 categories: %d, %d, %d, %d, %d\n", prob_id[0], prob_id[1], prob_id[2],
-		prob_id[3], prob_id[4]);
-	printf("Top 5 scores: %.4f, %.4f, %.4f, %.4f, %.4f\n", prob_softmax[0], prob_softmax[1],
-		prob_softmax[2], prob_softmax[3], prob_softmax[4]);
+	if (p_ctx->run_mode == DLR_FILE_MODE) {
+		printf("Top 5 categories: %d, %d, %d, %d, %d\n", prob_id[0], prob_id[1], prob_id[2],
+			prob_id[3], prob_id[4]);
+		printf("Top 5 scores: %.4f, %.4f, %.4f, %.4f, %.4f\n", prob_softmax[0], prob_softmax[1],
+			prob_softmax[2], prob_softmax[3], prob_softmax[4]);
+	}
 
 	return 0;
 }
@@ -487,11 +756,20 @@ static int dlr_process_outputs(dlr_ctx_t *p_ctx,
 	int rval = 0;
 
 	do {
-		if (dlr_dump_outputs(out_t, num_outputs) < 0) {
-			printf("Error: dlr_dump_outputs.\n");
-			rval = -1;
-			break;
+		if (p_ctx->run_mode == DLR_FILE_MODE) {
+			if (dlr_dump_outputs(out_t, num_outputs) < 0) {
+				printf("Error: dlr_dump_outputs.\n");
+				rval = -1;
+				break;
+			}
+		} else if (p_ctx->run_mode == DLR_REGRESSION_MODE) {
+			if (dlr_proc_socket_output(&p_ctx->socket_cfg, out_t, num_outputs) < 0) {
+				printf("Error: dlr_proc_socket_output\n");
+				rval = -1;
+				break;
+			}
 		}
+
 		if (num_outputs == 1) {
 			dlr_process_classification(p_ctx, out_t[0],
 				out_t[0]->shape[out_t[0]->ndim - 1]);
@@ -515,6 +793,7 @@ static int dlr_alloc_input_DLTensor(DLRModelHandle* handle, dlr_ctx_t *p_ctx,
 		const char* type = nullptr;
 		GetDLRInputType(handle, i,  &type);
 		DLTensor t;
+		memset(&t, 0, sizeof(t));
 		dlr_DLTensor_string2datatype(&t, type);
 		TVMArrayAlloc(shape, dim, t.dtype.code, t.dtype.bits, 1,
 			p_ctx->dev.type, p_ctx->dev.id, &in_t[i]);
@@ -569,6 +848,8 @@ typedef struct thread_arg_s {
 
 static void* dlr_execute_one_net(void *args)
 {
+	int rval = 0;
+
 	struct timeval tv1, tv2;
 	unsigned long tv_diff = 0;
 	bool has_meta = false;
@@ -603,6 +884,7 @@ static void* dlr_execute_one_net(void *args)
 		if (p_ctx->show_io) {
 			show_DLTensor_io(in_t, num_inputs, "input");
 			show_DLTensor_io(out_t, num_outputs, "output");
+			rval = 1;
 			break;
 		}
 
@@ -614,9 +896,23 @@ static void* dlr_execute_one_net(void *args)
 			}
 		}
 
-		if (dlr_prepare_file_mode(p_net, in_t) < 0) {
-			printf("Error: dlr_prepare_file_mode\n");
-			break;
+		if (p_ctx->run_mode == DLR_FILE_MODE) {
+			if (dlr_prepare_file_mode(p_net, in_t) < 0) {
+				printf("Error: dlr_prepare_file_mode\n");
+				rval = -1;
+				break;
+			}
+		}
+	} while(0);
+
+	do {
+		if (rval) break;
+		if (p_ctx->run_mode == DLR_REGRESSION_MODE) {
+			if (dlr_proc_socket_input(&p_ctx->socket_cfg, p_net, in_t) < 0) {
+				printf("Error: dlr_proc_socket_input\n");
+				rval = -1;
+				break;
+			}
 		}
 
 		// set input
@@ -628,7 +924,7 @@ static void* dlr_execute_one_net(void *args)
 		RunDLRModel(&mod);
 
 		// evaluate execution time at second Run()
-		if (p_ctx->print_time) {
+		if (p_ctx->print_time && p_ctx->run_mode == DLR_FILE_MODE) {
 			gettimeofday(&tv1, NULL);
 			RunDLRModel(&mod);
 			gettimeofday(&tv2, NULL);
@@ -642,7 +938,7 @@ static void* dlr_execute_one_net(void *args)
 			printf("Error: dlr_process_outputs.\n");
 			break;
 		}
-	} while(0);
+	} while(p_ctx->run_mode && run_flag);
 
 	dlr_free_input_DLTensor(in_t, num_inputs);
 	dlr_free_output_DLTensor(out_mt, num_outputs);
@@ -687,6 +983,7 @@ static int dlr_run_module(dlr_ctx_t *p_ctx)
 
 static void sigstop(int)
 {
+	run_flag = 0;
 	printf("sigstop msg, exit test_amba_dlr.\n");
 }
 
@@ -699,6 +996,7 @@ int main(int argc, char *argv[])
 	int rval = 0;
 	dlr_ctx_t dlr_ctx;
 	dlr_ctx_t *p_ctx = &dlr_ctx;
+	int socket_inited = 0;
 
 	memset(p_ctx, 0, sizeof(dlr_ctx));
 
@@ -717,12 +1015,27 @@ int main(int argc, char *argv[])
 			rval = -1;
 			break;
 		}
+		if (p_ctx->run_mode == DLR_REGRESSION_MODE) {
+			if (dlr_init_socket(&p_ctx->socket_cfg) < 0) {
+				printf("Error: dlr_init_socket\n");
+				rval = -1;
+				break;
+			}
+			socket_inited = 1;
+		}
 		if (dlr_run_module(p_ctx) < 0) {
 			printf("Error: dlr_run_module.\n");
 			rval = -1;
 			break;
 		}
 	} while(0);
+
+	if (p_ctx->run_mode == DLR_REGRESSION_MODE) {
+		if (socket_inited) {
+			dlr_deinit_socket(&p_ctx->socket_cfg);
+		}
+		socket_inited = 0;
+	}
 
 	return rval;
 }
