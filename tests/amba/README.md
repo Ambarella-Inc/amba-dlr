@@ -71,5 +71,15 @@ There are preparation steps to do compilation job in Sagemaker service. More det
 
 4. Run test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live to do model inference
 
-NOTES: "test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live" are only sample code and users should write their own app in real produce design.
+NOTES: "test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live" are only sample code and users should write their own app in real product design.
+
+
+## 4. Typical Issues
+
+#### Compiled artifacts version mismatch
+There are two kinds of version mismatch in DLR/TVM runtime.
+
+Firstly, DLR/TVM has its own version control. There might be API upgrade/change between different versions. So versions of unit test apps like test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live should match those of prebuilt libraries libdlr.so and libtvm_runtime.so.
+
+Secondly, the compiled artifact (file compiled.amba) which runs on Ambarella silicon device is also version controlled. This compiled.amba file is called cavalry binary in Ambarella SDK. There might be errors when version of cavalry binary doesn't match that of Ambarella SDK. Version mismatch error could be removed by converting cavalry binary to expected version with released cavalry_gen tool. Users can contact Ambarella engineers to access this cavalry_gen tool.
 
