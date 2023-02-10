@@ -16,7 +16,7 @@ Git doesn’t allow users to login with passwords any more, only with [personal 
 
 Please follow below command to update local source code when there is further update in remote git repository.
 
-	$ cd amba-dlr && git pull & git submodule update
+	$ cd amba-dlr && git pull && git submodule update
 
 ## 2. Build with Ambarella Linux SDK
 
