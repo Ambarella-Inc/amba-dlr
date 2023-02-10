@@ -67,10 +67,10 @@ LOCAL_TARGET	:= test_amba_dlr_live
 LOCAL_SRCS	:= $(LOCAL_PATH)/test_amba_dlr_live.cpp
 
 LOCAL_CFLAGS 	+= -I$(AMB_TOPDIR)/packages/cavalry_mem/inc \
-		-I$(AMB_TOPDIR)/packages/vproc/inc \
+		-I$(AMB_TOPDIR)/packages/vproc/$(AMBA_CAVALRY_ARCH)/inc \
 		-I$(AMB_TOPDIR)/packages/smartfb \
-		-I$(AMB_TOPDIR)/include/cavalry \
-		-I$(AMB_TOPDIR)/packages/fast_io \
+		-I$(AMB_TOPDIR)/include/cavalry/$(AMBA_CAVALRY_ARCH) \
+		-I$(AMB_TOPDIR)/packages/eazyai/inc \
 		-I$(OPENCV_PATH)/include/opencv \
 		-I$(OPENCV_PATH)/include \
 		-I$(AMBA_DLR_ROOT_DIR)/prebuild/amba/include \
@@ -92,7 +92,7 @@ LOCAL_LDFLAGS	:= -lpthread -lm \
 		-Wl,-rpath-link=$(PREBUILD_OSS_DIR)/zlib/usr/lib \
 		-Wl,-rpath-link=$(PREBUILD_OSS_DIR)/tbb/usr/lib
 
-LOCAL_LIBS   	:= libcavalry_mem.so libnnctrl.so libvproc.so libfast_io.so
+LOCAL_LIBS   	:= libcavalry_mem.so libnnctrl.so libvproc.so libeazyai.so
 
 include $(BUILD_APP)
 
@@ -115,7 +115,8 @@ LOCAL_SRCS	:= $(LOCAL_PATH)/test_amba_tvm.cpp
 LOCAL_CFLAGS 	+= -I$(AMBA_DLR_ROOT_DIR)/prebuild/amba/include \
 		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/include \
 		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dlpack/include \
-		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dmlc-core/include
+		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dmlc-core/include \
+		-std=c++17
 
 LOCAL_LDFLAGS	:= -lpthread -lm \
 		-L$(AMBA_DLR_ROOT_DIR)/prebuild/amba/lib/linux \
@@ -143,13 +144,14 @@ LOCAL_TARGET	:= test_amba_tvm_live
 LOCAL_SRCS	:= $(LOCAL_PATH)/test_amba_tvm_live.cpp
 
 LOCAL_CFLAGS 	+= -I$(AMB_TOPDIR)/packages/cavalry_mem/inc \
-		-I$(AMB_TOPDIR)/packages/vproc/inc \
+		-I$(AMB_TOPDIR)/packages/vproc/$(AMBA_CAVALRY_ARCH)/inc \
 		-I$(AMB_TOPDIR)/packages/smartfb \
-		-I$(AMB_TOPDIR)/include/cavalry \
+		-I$(AMB_TOPDIR)/include/cavalry/$(AMBA_CAVALRY_ARCH) \
 		-I$(AMBA_DLR_ROOT_DIR)/prebuild/amba/include \
 		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/include \
 		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dlpack/include \
-		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dmlc-core/include
+		-I$(AMBA_DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dmlc-core/include \
+		-std=c++17
 
 LOCAL_LDFLAGS	:= -lpthread -lm \
 		-L$(AMBA_DLR_ROOT_DIR)/prebuild/amba/lib/linux \

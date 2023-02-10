@@ -50,7 +50,7 @@
 #include "amba_tvm.h"
 
 #define DLR_APP_MAJOR	(1)
-#define DLR_APP_MINOR	(11)
+#define DLR_APP_MINOR	(13)
 #define DLR_APP_PATCH	(0)
 
 #define FILENAME_LENGTH	(2048)
@@ -648,6 +648,12 @@ static int dlr_proc_socket_output(dlr_socket_t *p_socket,
 	return rval;
 }
 
+static bool dlr_is_file(const char *filename)
+{
+	struct stat statbuff;
+	return (stat(filename, &statbuff) == 0 && S_ISREG(statbuff.st_mode));
+}
+
 static int dlr_read_binary(const char* filename, DLTensor *t)
 {
 	int rval = 0;
@@ -655,6 +661,11 @@ static int dlr_read_binary(const char* filename, DLTensor *t)
 	std::ifstream data_fin(filename, std::ios::binary);
 
 	do {
+		if (!dlr_is_file(filename)) {
+			printf("Error: %s is invalid file\n", filename);
+			rval = -1;
+			break;
+		}
 		data_fin.seekg (0, data_fin.end);
 
 		int file_size = data_fin.tellg();

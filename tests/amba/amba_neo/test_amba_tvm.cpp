@@ -618,6 +618,12 @@ static std::string get_file_dirname(const char *file_path)
 	return dir_path;
 }
 
+static bool tvm_is_file(const char *filename)
+{
+	struct stat statbuff;
+	return (stat(filename, &statbuff) == 0 && S_ISREG(statbuff.st_mode));
+}
+
 static int tvm_read_binary(const char* filename, DLTensor *t)
 {
 	int rval = 0;
@@ -625,6 +631,11 @@ static int tvm_read_binary(const char* filename, DLTensor *t)
 	std::ifstream data_fin(filename, std::ios::binary);
 
 	do {
+		if (!tvm_is_file(filename)) {
+			printf("Error: %s is invalid file\n", filename);
+			rval = -1;
+			break;
+		}
 		data_fin.seekg (0, data_fin.end);
 
 		int file_size = data_fin.tellg();
@@ -808,20 +819,6 @@ static int tvm_process_outputs(tvm_ctx_t *p_ctx,tvm_net_cfg_t *p_net,
 	return rval;
 }
 
-static float tvm_debug_individule_sum(std::string str)
-{
-	float sum = 0.0;
-	size_t pos = str.find(",");
-
-	if (pos != std::string::npos) {
-		std::string num_str = str.substr(0, pos);
-		std::string remain_str = str.substr(pos + 1);
-		sum = atof(num_str.c_str()) * 1000000.0f + tvm_debug_individule_sum(remain_str);
-	}
-
-	return sum;
-}
-
 typedef struct thread_arg_s {
 	void *ctx;
 	void *net;
@@ -830,6 +827,8 @@ typedef struct thread_arg_s {
 static void* tvm_execute_one_net(void *args)
 {
 	int rval = 0;
+	struct timeval tv1, tv2;
+	unsigned long tv_diff = 0;
 
 	tvm_ctx_t *p_ctx = (tvm_ctx_t*)(((thread_arg_t*)args)->ctx);
 	tvm_net_cfg_t *p_net = (tvm_net_cfg_t*)(((thread_arg_t*)args)->net);
@@ -913,10 +912,15 @@ static void* tvm_execute_one_net(void *args)
 	if (rval == 0) {
 		if (p_net->debug_runtime && p_ctx->run_mode == TVM_FILE_MODE) {
 			tvm::runtime::PackedFunc run_individual = mod.GetFunction("run_individual");
-			std::string debug_rt_str = run_individual(10,1,100).operator std::string();
+			run_individual(10,1,100, 0, 0, 2).operator std::string();
 
-			float op_time = tvm_debug_individule_sum(debug_rt_str);
-			printf("[%s] run time: %.1f us\n", p_net->model_fn, op_time);
+			gettimeofday(&tv1, NULL);
+			run();
+			gettimeofday(&tv2, NULL);
+			tv_diff = (unsigned long) 1000000 * (unsigned long) (tv2.tv_sec - tv1.tv_sec) +
+				(unsigned long) (tv2.tv_usec - tv1.tv_usec);
+
+			printf("[%s] run time: %ld us\n", p_net->model_fn, tv_diff);
 		}
 	}
 

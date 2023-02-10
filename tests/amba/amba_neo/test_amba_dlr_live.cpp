@@ -47,10 +47,10 @@
 
 // Amba SDK
 #include "iav_ioctl.h"
-#include "fast_io.h"
 #include "cavalry_mem.h"
 #include "vproc.h"
 #include "amba_tvm.h"
+#include "core/eazyai_core.h"
 
 // 3rdparty
 #include "opencv2/opencv.hpp"
@@ -58,7 +58,7 @@
 
 
 #define DLR_APP_MAJOR	(1)
-#define DLR_APP_MINOR	(11)
+#define DLR_APP_MINOR	(13)
 #define DLR_APP_PATCH	(0)
 
 #define DLR_VPROC_BIN	"/usr/local/vproc/vproc.bin"
@@ -78,6 +78,8 @@
 #ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
+
+EA_LOG_DECLARE_LOCAL(EA_LOG_LEVEL_NOTICE);
 
 typedef enum {
 	DLR_QUERY_BUF_CANVAS = 0,
@@ -140,7 +142,9 @@ typedef struct {
 } dlr_dev_t;
 
 typedef struct {
-	fast_io_buf_info_t buf_info;
+	ea_osd_t *display;
+	ea_img_resource_t *img_resource;
+	const ea_osd_area_buffer_t *buf_info;
 	uint32_t stream_id;
 } dlr_overlay_t;
 
@@ -209,6 +213,61 @@ static const int coco_label_id[] = {
 	37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53,
 	54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73,
 	74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90
+};
+
+#define MAX_BACKGROUND_CLUT_NUM 256
+
+enum lut_color {
+	COLOR_RED = 0,
+	COLOR_LIME = 1,
+	COLOR_BLUE = 2,
+	COLOR_MAGENTA = 3,
+	COLOR_SPRING_GREEN = 4,
+	COLOR_MEDIUM_SLATE_BLUE = 5,
+	COLOR_YELLOW = 6,
+	COLOR_DARK_ORANGE = 7,
+	COLOR_CYAN = 8,
+	COLOR_GREEN = 9,
+	COLOR_BLUE_VIOLET = 10,
+	COLOR_VIOLET = 11,
+	COLOR_DEEP_PINK = 12,
+	COLOR_NAVY = 13,
+	COLOR_MAROON = 14,
+	COLOR_PURPLE = 15,
+	COLOR_SALMON = 16,
+	COLOR_OLIVE = 17,
+	COLOR_MOCCASIN = 18,
+	COLOR_TEAL = 19,
+	COLOR_GRAY = 20,
+	COLOR_BLACK = 21,
+	COLOR_WHITE = 22,
+	COLOR_NUM,
+};
+
+const static ea_osd_color_rgba_t colors_table[COLOR_NUM] = {
+	[COLOR_RED] = {.r = 255, .g = 0, .b = 0, .alpha = 0},
+	[COLOR_LIME] = {.r = 0, .g = 255, .b = 0, .alpha = 255},
+	[COLOR_BLUE] = {.r = 0, .g = 0, .b = 255, .alpha = 255},
+	[COLOR_MAGENTA] = {.r = 255, .g = 0, .b = 255, .alpha = 255},
+	[COLOR_SPRING_GREEN] = {.r = 0, .g = 255, .b = 127, .alpha = 255},
+	[COLOR_MEDIUM_SLATE_BLUE] = {.r = 127, .g = 127, .b = 255, .alpha = 255},
+	[COLOR_YELLOW] = {.r = 255, .g = 255, .b = 0, .alpha = 255},
+	[COLOR_DARK_ORANGE] = {.r = 255, .g = 127, .b = 0, .alpha = 255},
+	[COLOR_CYAN] = {.r = 0, .g = 255, .b = 255, .alpha = 255},
+	[COLOR_GREEN] = {.r = 0, .g = 127, .b = 0, .alpha = 255},
+	[COLOR_BLUE_VIOLET] = {.r = 127, .g = 0, .b = 255, .alpha = 255},
+	[COLOR_VIOLET] = {.r = 255, .g = 127, .b = 255, .alpha = 255},
+	[COLOR_DEEP_PINK] = {.r = 255, .g = 0, .b = 127, .alpha = 255},
+	[COLOR_NAVY] = {.r = 0, .g = 0, .b = 127, .alpha = 255},
+	[COLOR_MAROON] = {.r = 127, .g = 0, .b = 0, .alpha = 255},
+	[COLOR_PURPLE] = {.r = 127, .g = 0, .b = 127, .alpha = 255},
+	[COLOR_SALMON] = {.r = 255, .g = 127, .b = 127, .alpha = 255},
+	[COLOR_OLIVE] = {.r = 127, .g = 127, .b = 0, .alpha = 255},
+	[COLOR_MOCCASIN] = {.r = 255, .g = 255, .b = 180, .alpha = 255},
+	[COLOR_TEAL] = {.r = 0, .g = 127, .b = 127, .alpha = 255},
+	[COLOR_GRAY] = {.r = 127, .g = 127, .b = 127, .alpha = 255},
+	[COLOR_BLACK] = {.r = 0, .g = 0, .b = 0, .alpha = 255},
+	[COLOR_WHITE] = {.r = 255, .g = 255, .b = 255, .alpha = 255},
 };
 
 #ifndef NO_ARG
@@ -464,6 +523,70 @@ static int init_param(int argc, char **argv, dlr_ctx_t *p_ctx)
 	return 0;
 }
 
+static void dlr_init_color_table(dlr_ctx_t *p_ctx)
+{
+	ea_osd_area_set_color_table_rgba(p_ctx->overlay.display, 0, colors_table, COLOR_NUM);
+}
+
+static int dlr_init_overlay(dlr_ctx_t *p_ctx)
+{
+	int rval = 0;
+	int env_ret = -1;
+	int features = 0;
+	dlr_overlay_t *p_cfg = &p_ctx->overlay;
+
+	do {
+		features = EA_ENV_ENABLE_IAV | EA_ENV_ENABLE_OSD_STREAM;
+
+		env_ret = ea_env_open(features);
+		if (env_ret < 0) {
+			printf("ea_env_open failed !\n");
+			rval = -1;
+			break;
+		}
+		if (p_ctx->iav.query_buf_type == DLR_QUERY_BUF_CANVAS) {
+			p_cfg->img_resource = ea_img_resource_new(EA_CANVAS, (void *)(unsigned long)p_ctx->iav.query_buf_id);
+		} else {
+			p_cfg->img_resource = ea_img_resource_new(EA_PYRAMID, (void *)(unsigned long)0);
+		}
+		RVAL_ASSERT(p_cfg->img_resource != NULL);
+		p_cfg->display = ea_osd_new(EA_OSD_STREAM, p_ctx->overlay.stream_id, NULL);
+		RVAL_ASSERT(p_cfg->display != NULL);
+		p_cfg->buf_info = ea_osd_area_current_buffer(p_cfg->display, 0);
+	} while(0);
+
+	if (rval < 0) {
+		if (p_cfg->display) {
+			ea_osd_free(p_cfg->display);
+			p_cfg->display = NULL;
+		}
+
+		if (p_cfg->img_resource) {
+			ea_img_resource_free(p_cfg->img_resource);
+			p_cfg->img_resource = NULL;
+		}
+
+		if (env_ret >= 0) {
+			ea_env_close();
+		}
+	}
+
+	return rval;
+}
+
+static void dlr_deinit_overlay(dlr_overlay_t *p_cfg)
+{
+	if (p_cfg->display) {
+		ea_osd_free(p_cfg->display);
+		p_cfg->display = NULL;
+	}
+	if (p_cfg->img_resource) {
+		ea_img_resource_free(p_cfg->img_resource);
+		p_cfg->img_resource = NULL;
+	}
+	ea_env_close();
+}
+
 static int check_dlr_version(void)
 {
 	int rval = 0;
@@ -474,7 +597,6 @@ static int check_dlr_version(void)
 			DLR_APP_MINOR, DLR_APP_PATCH, DLR_MAJOR, DLR_MINOR, DLR_PATCH);
 		rval = -1;
 	}
-
 
 	return rval;
 }
@@ -523,29 +645,6 @@ static int dlr_DLTensor_string2datatype(DLTensor *t, const char *type)
 	}
 
 	return rval;
-}
-
-static int dlr_init_overlay(dlr_ctx_t *p_ctx)
-{
-	int rval = 0;
-	dlr_overlay_t *p_cfg = &p_ctx->overlay;
-
-	do {
-		if (fast_io_open_overlay(&p_cfg->buf_info, p_cfg->stream_id) < 0) {
-			printf("Error: unable to init overlay buffer!\n");
-			rval = -1;
-			break;
-		}
-		printf("Overlay buffer: %dx%d, pitch = %d\n", p_cfg->buf_info.width,
-			p_cfg->buf_info.height, p_cfg->buf_info.pitch);
-	} while(0);
-
-	return rval;
-}
-
-static void dlr_deinit_overlay(void)
-{
-	fast_io_close_overlay();
 }
 
 static int dlr_alloc_input_DLTensor(DLRModelHandle* handle, dlr_ctx_t *p_ctx,
@@ -629,8 +728,9 @@ static void get_overlay_screen(dlr_ctx_t *p_ctx, cv::Mat &img)
 {
 	dlr_overlay_t *p_cfg = &p_ctx->overlay;
 
-	img = cv::Mat(p_cfg->buf_info.height, p_cfg->buf_info.width, CV_8UC1,
-			get_overlay_address(), p_cfg->buf_info.pitch);
+	uint8_t *fb_buf = ea_osd_area_current_buffer(p_cfg->display, 0)->buf;
+	img = cv::Mat(p_cfg->buf_info->height, p_cfg->buf_info->width, CV_8UC1,
+			fb_buf, p_cfg->buf_info->pitch);
 	memset(img.data, 0, img.rows * img.step);
 }
 
@@ -645,7 +745,7 @@ static int dlr_draw_overlay_classification(dlr_ctx_t *p_ctx, int *id, float *sco
 	int line_gap = 35;
 
 	get_overlay_screen(p_ctx, img);
-	osd_color = COLOR_TABLE_BASE + FAST_ALPHA_NUM * FAST_COLOR_MAGENTA + FAST_ALPHA_LEVEL3;
+	osd_color = COLOR_MAGENTA;
 	if (score[0] > p_ctx->conf_th) {
 		for (i = 0; i < top5; ++ i) {
 			memset(osd_str, 0, str_len);
@@ -654,7 +754,8 @@ static int dlr_draw_overlay_classification(dlr_ctx_t *p_ctx, int *id, float *sco
 				1, osd_color, 2, 8, false);
 		}
 	}
-	refresh_overlay();
+
+	ea_osd_refresh(p_ctx->overlay.display, NULL);
 
 	return 0;
 }
@@ -745,8 +846,8 @@ static int dlr_draw_overlay_ssd(dlr_ctx_t *p_ctx, DLTensor** out, DLTensor *in)
 		return -1;
 	}
 
-	xres = p_cfg->buf_info.width;
-	yres = p_cfg->buf_info.height;
+	xres = p_cfg->buf_info->width;
+	yres = p_cfg->buf_info->height;
 
 	get_overlay_screen(p_ctx, img);
 	if (num_bbox > 0) {
@@ -775,7 +876,7 @@ static int dlr_draw_overlay_ssd(dlr_ctx_t *p_ctx, DLTensor** out, DLTensor *in)
 			end_y = MAX(MIN(yres, end_y), 0);
 
 			class_id = fetch_label_id(p_ctx, static_cast<int>(p_id[i]));
-			osd_color = COLOR_TABLE_BASE + FAST_ALPHA_NUM * (class_id % FAST_COLOR_NUM) + FAST_ALPHA_LEVEL3;
+			osd_color = class_id % COLOR_NUM;
 			cv::rectangle(img, cv::Point(start_x, start_y), cv::Point(end_x, end_y), osd_color, 2);
 			memset(osd_str, 0, str_len);
 			sprintf(osd_str, "%s %.3f", dataset[class_id], p_score[i]);
@@ -783,7 +884,8 @@ static int dlr_draw_overlay_ssd(dlr_ctx_t *p_ctx, DLTensor** out, DLTensor *in)
 				cv::FONT_HERSHEY_COMPLEX, 1.5, osd_color, 2);
 		}
 	}
-	refresh_overlay();
+
+	ea_osd_refresh(p_cfg->display, NULL);
 
 	return 0;
 }
@@ -1311,7 +1413,7 @@ static int dlr_init_vproc(dlr_ctx_t *p_ctx)
 static void dlr_deinit_vproc(dlr_vproc_t *p_vproc)
 {
 	vproc_exit();
-	// cavalry_mem_exit and fd_cav closing is done at DeleteDLRModel
+	// cavalry_mem_exit and fd_cav closing is done in DeleteDLRModel
 }
 
 static int dlr_read_buffer(dlr_ctx_t *p_ctx, DLTensor *t, DLTensor *phys_t)
@@ -1540,6 +1642,7 @@ int main(int argc, char *argv[])
 			rval = -1;
 			break;
 		}
+		dlr_init_color_table(p_ctx);
 		if (dlr_execute_one_net(p_ctx) < 0) {
 			printf("Error: dlr_execute_one_net.\n");
 			rval = -1;
@@ -1547,9 +1650,9 @@ int main(int argc, char *argv[])
 		}
 	} while(0);
 
-	dlr_deinit_iav(&p_ctx->iav);
 	dlr_deinit_vproc(&p_ctx->vproc);
-	dlr_deinit_overlay();
+	dlr_deinit_overlay(&p_ctx->overlay);
+	dlr_deinit_iav(&p_ctx->iav);
 
 	return rval;
 }
