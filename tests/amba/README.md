@@ -4,6 +4,7 @@ This is a user guide to illustrate how to build Ambarella Linux SDK with AWS Neo
 
 ## Important Notice
 :warning: You may not disclose or distribute software of this private git repository without the agreement of Ambarella International LP.
+
 :white_check_mark: User can build test app without access to this private git repository. See ***4 Typical Issues*** for more details.
 
 ##
