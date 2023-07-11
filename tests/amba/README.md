@@ -2,27 +2,9 @@
 
 This is a user guide to illustrate how to build Ambarella Linux SDK with AWS Neo DLR/TVM integration.
 
-## Important Note
+## Important Notice
 :warning: You may not disclose or distribute software of this private git repository without the agreement of Ambarella International LP.
-
-:white_check_mark: Here are steps for users who want to build test app that can run DLR/TVM with Ambarella implementation but have no access to this private git repository.
-
- - Choose Ambarella device when running AWS Sagemaker service and get compiled output tarball from it
- - Untar the output tarball and get library files *libamba_tvm.so, libdlr.so and libtvm.so*
- - Download [neo-ai-dlr](https://github.com/neo-ai/neo-ai-dlr) with proper branch which inlucdes all DLR/TVM API header files for test app compilation
- - Get library files *libcavalry_mem.so* and *libnnctrl.so* from Ambarella Linux SDK
- - Extern one API explicitly in test app and call it in the very beginning of test app. This API is intended to mark the directory path of untared compiled output from AWS Sagemake service
-
-       extern int ConfigAmbaEngineLocation(const char *dirpath);
-       ...
-       int main()
-       {
-	       std::string dir_path = "directory/path/that/contains/compiled_xxx.so";
-	       ConfigAmbaEngineLocation(dir_path.c_str());
-	       ...
-       }
-
- - Write left part of test app as standard DLR/TVM tests do and build it with header files and library files metioned above
+:white_check_mark: User can build test app without access to this private git repository. See ***4 Typical Issues*** for more details.
 
 ##
 
@@ -105,4 +87,60 @@ There are two kinds of version mismatch in DLR/TVM runtime.
 Firstly, DLR/TVM has its own version control. There might be API upgrade/change between different versions. So versions of unit test apps like test_amba_tvm / test_amba_tvm_live / test_amba_dlr / test_amba_dlr_live should match those of prebuilt libraries libdlr.so and libtvm_runtime.so.
 
 Secondly, the compiled artifact (file compiled.amba) which runs on Ambarella silicon device is also version controlled. This compiled.amba file is called cavalry binary in Ambarella SDK. There might be errors when version of cavalry binary doesn't match that of Ambarella SDK. Version mismatch error could be removed by converting cavalry binary to expected version with released cavalry_gen tool. Users can contact Ambarella engineers to access this cavalry_gen tool.
+
+#### Build test app without access to amba-dlr source code
+Here are steps for users who want to build test app that can run DLR/TVM with Ambarella implementation but have no access to this private git repository.
+
+ - Choose Ambarella device when running AWS Sagemaker service and get compiled output tarball from it;
+ - Untar the output tarball and get library files *libamba_tvm.so, libdlr.so and libtvm.so*;
+ - Download [neo-ai-dlr](https://github.com/neo-ai/neo-ai-dlr) with proper branch which inlucdes all DLR/TVM API header files for test app compilation;
+ - Get library files *libcavalry_mem.so* and *libnnctrl.so* from Ambarella Linux SDK;
+ - Extern one API explicitly in test app and call it in the very beginning of test app. This API is not defined in standard DLR/TVM API header files and it's intended to mark the directory path of untared compiled output from AWS Sagemake service;
+
+       extern int ConfigAmbaEngineLocation(const char *dirpath);
+       ...
+       int main()
+       {
+	       std::string dir_path = "directory/path/that/contains/compiled_xxx.so";
+	       ConfigAmbaEngineLocation(dir_path.c_str());
+	       ...
+       }
+
+ - Write left part of test app as standard DLR/TVM tests do and build it with header files and library files metioned above;
+
+	 Makefile example to build TVM test app.
+
+	   PREBUILD_DIR := /dir/path/to/all/necessary/libs
+	   DLR_ROOT_DIR := /dir/path/to/neo-ai-dlr
+	   CXX := /path/to/aarch64-linux-gnu-g++
+
+	   CFLAGS := -std=c++17 -Wall \
+		    -I${PREBUILD_DIR}/include \
+		    -I${DLR_ROOT_DIR}/3rdparty/tvm/include \
+		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dlpack/include \
+		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dmlc-core/include
+	   LDFLAGS +:= -L${PREBUILD_DIR}/lib \
+		    -lcavalry_mem -lnnctrl -lamba_tvm -ltvm_runtime
+
+	   .PHONY: test_amba_tvm
+	   test_amba_tvm:
+		  @${CXX} -o $@ $@.cpp ${CFLAGS} ${LDFLAGS}
+
+	Makefile example to build DLR test app.
+
+	   CFLAGS := -std=c++17 -Wall \
+		  -I$(DLR_ROOT_DIR)/include \
+		  -I$(DLR_ROOT_DIR)/3rdparty/json \
+		  -I$(DLR_ROOT_DIR)/3rdparty/tvm/include \
+		  -I$(DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dlpack/include \
+		  -I$(DLR_ROOT_DIR)/3rdparty/tvm/3rdparty/dmlc-core/include \
+		  -I$(DLR_ROOT_DIR)/3rdparty/tvm/src/runtime
+	   LDFLAGS := -L${PREBUILD_DIR}/lib \
+		  -lcavalry_mem -lnnctrl -lamba_tvm -ltvm_runtime -ldlr
+
+	   .PHONY: test_amba_dlr
+	   test_amba_dlr:
+		  @${CXX} -o $@ $@.cpp ${CFLAGS} ${LDFLAGS}
+
+
 
