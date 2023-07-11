@@ -2,6 +2,29 @@
 
 This is a user guide to illustrate how to build Ambarella Linux SDK with AWS Neo DLR/TVM integration.
 
+## Important Note
+:warning: You may not disclose or distribute software of this private git repository without the agreement of Ambarella International LP.
+
+:white_check_mark: Here are steps for users who want to build test app that can run DLR/TVM with Ambarella implementation but have no access to this private git repository.
+
+ - Choose Ambarella device when running AWS Sagemaker service and get compiled output tarball from it
+ - Untar the output tarball and get library files *libamba_tvm.so, libdlr.so and libtvm.so*
+ - Download [neo-ai-dlr](https://github.com/neo-ai/neo-ai-dlr) with proper branch which inlucdes all DLR/TVM API header files for test app compilation
+ - Get library files *libcavalry_mem.so* and *libnnctrl.so* from Ambarella Linux SDK
+ - Extern one API explicitly in test app and call it in the very beginning of test app. This API is intended to mark the directory path of untared compiled output from AWS Sagemake service
+
+       extern int ConfigAmbaEngineLocation(const char *dirpath);
+       ...
+       int main()
+       {
+	       std::string dir_path = "directory/path/that/contains/compiled_xxx.so";
+	       ConfigAmbaEngineLocation(dir_path.c_str());
+	       ...
+       }
+
+ - Write left part of test app as standard DLR/TVM tests do and build it with header files and library files metioned above
+
+##
 
 ## 1. DLR/TVM Source Code
 
