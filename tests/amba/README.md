@@ -22,7 +22,7 @@ Git doesn’t allow users to login with passwords any more, only with [personal 
 
 Please follow below command to update local source code when there is further update in remote git repository.
 
-	$ cd amba-dlr && git pull & git submodule update
+	$ cd amba-dlr && git pull && git submodule update
 
 ## 2. Build with Ambarella Linux SDK
 
@@ -116,7 +116,6 @@ Here are steps for users who want to build test app that can run DLR/TVM with Am
 	   CXX := /path/to/aarch64-linux-gnu-g++
 
 	   CFLAGS := -std=c++17 -Wall \
-		    -I${PREBUILD_DIR}/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dlpack/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dmlc-core/include
