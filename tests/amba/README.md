@@ -116,7 +116,6 @@ Here are steps for users who want to build test app that can run DLR/TVM with Am
 	   CXX := /path/to/aarch64-linux-gnu-g++
 
 	   CFLAGS := -std=c++17 -Wall \
-		    -I${PREBUILD_DIR}/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dlpack/include \
 		    -I${DLR_ROOT_DIR}/3rdparty/tvm/3rdparty/dmlc-core/include
