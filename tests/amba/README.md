@@ -94,9 +94,9 @@ Here are steps for users who want to build test app that can run DLR/TVM with Am
 
  - Choose Ambarella device when running AWS Sagemaker service and get compiled output tarball from it;
  - Untar the output tarball and get library files *libamba_tvm.so, libdlr.so and libtvm.so*;
- - Download [neo-ai-dlr](https://github.com/neo-ai/neo-ai-dlr) with proper branch which inlucdes all DLR/TVM API header files for test app compilation;
+ - Download [neo-ai-dlr](https://github.com/neo-ai/neo-ai-dlr) with proper branch which includes all DLR/TVM API header files for test app compilation;
  - Get library files *libcavalry_mem.so* and *libnnctrl.so* from Ambarella Linux SDK;
- - Extern one API explicitly in test app and call it in the very beginning of test app. This API is not defined in standard DLR/TVM API header files and it's intended to mark the directory path of untared compiled output from AWS Sagemake service;
+ - Extern one API explicitly in test app and call it in the very beginning of test app. This API is not defined in standard DLR/TVM API header files and it's intended to mark the directory path of untared compiled output from AWS Sagemaker service;
 
        extern int ConfigAmbaEngineLocation(const char *dirpath);
        ...
@@ -107,7 +107,7 @@ Here are steps for users who want to build test app that can run DLR/TVM with Am
 	       ...
        }
 
- - Write left part of test app as standard DLR/TVM tests do and build it with header files and library files metioned above;
+ - Write left part of test app as standard DLR/TVM tests do and build it with header files and library files mentioned above;
 
 	 Makefile example to build TVM test app.
 
